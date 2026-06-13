@@ -143,10 +143,11 @@
 
         <div class="form-group">
             <input type="text" id="comments" placeholder="Comentarii" style="flex-grow: 1;">
+            <input type="file" id="fileUpload" accept="image/jpeg, image/png, application/pdf" style="flex-grow: 1;">
             <label class="checkbox-container">
                 <input type="checkbox" id="isPaid"> Achitat acum
             </label>
-            <button type="submit">Salvează</button>
+            <button type="submit" id="saveBtn">Salvează</button>
         </div>
     </form>
 
@@ -275,7 +276,8 @@
                     comments: exp.comments || '',
                     is_paid: false,
                     current_rate: exp.current_rate + 1,
-                    total_rates: exp.total_rates
+                    total_rates: exp.total_rates,
+                    file_url: null 
                 };
                 await supabaseClient.from('cheltuieli').insert([nextExp]);
             }
@@ -284,6 +286,28 @@
 
     document.getElementById('expenseForm').addEventListener('submit', async function(e) {
         e.preventDefault();
+        
+        const saveBtn = document.getElementById('saveBtn');
+        saveBtn.innerText = 'Se salvează...';
+        saveBtn.disabled = true;
+
+        let uploadedFileUrl = null;
+        const fileInput = document.getElementById('fileUpload');
+        
+        if (fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            const fileExt = file.name.split('.').pop();
+            const fileName = Date.now() + '.' + fileExt;
+            
+            const { data: uploadData, error: uploadError } = await supabaseClient.storage.from('facturi').upload(fileName, file);
+            
+            if (!uploadError) {
+                const { data: publicUrlData } = supabaseClient.storage.from('facturi').getPublicUrl(fileName);
+                uploadedFileUrl = publicUrlData.publicUrl;
+            } else {
+                alert("A apărut o eroare la încărcarea facturii.");
+            }
+        }
         
         const currentRateVal = document.getElementById('currentRate').value;
         const totalRatesVal = document.getElementById('totalRates').value;
@@ -296,7 +320,8 @@
             comments: document.getElementById('comments').value,
             is_paid: document.getElementById('isPaid').checked,
             current_rate: currentRateVal ? parseInt(currentRateVal) : null,
-            total_rates: totalRatesVal ? parseInt(totalRatesVal) : null
+            total_rates: totalRatesVal ? parseInt(totalRatesVal) : null,
+            file_url: uploadedFileUrl
         };
         
         await supabaseClient.from('cheltuieli').insert([exp]);
@@ -311,6 +336,9 @@
         this.reset();
         document.getElementById('expenseMonth').value = currentMonth;
         toggleRateFields();
+        
+        saveBtn.innerText = 'Salvează';
+        saveBtn.disabled = false;
     });
 
     async function togglePaid(id, currentStatus) {
@@ -346,10 +374,15 @@
             if (exp.category === '1' && exp.current_rate && exp.total_rates) {
                 rateBadge = `<span style="font-size: 0.85em; color: #f39c12; margin-left: 8px;">- Rata ${exp.current_rate} din ${exp.total_rates}</span>`;
             }
+            
+            let fileLink = '';
+            if (exp.file_url) {
+                fileLink = `<br><a href="${exp.file_url}" target="_blank" style="color: #3498db; text-decoration: none; font-size: 0.85em;">📄 Vezi Factura / QR</a>`;
+            }
 
             tr.innerHTML = `
                 <td>${exp.month_val}</td>
-                <td><strong>${exp.merchant}</strong>${rateBadge}</td>
+                <td><strong>${exp.merchant}</strong>${rateBadge}${fileLink}</td>
                 <td>Cat ${exp.category}</td>
                 <td>${exp.amount.toFixed(2)}</td>
                 <td>${exp.comments || ''}</td>
