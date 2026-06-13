@@ -21,7 +21,7 @@
             border-radius: 12px; 
             box-shadow: 0 4px 15px rgba(0,0,0,0.6); 
         }
-        h1, h2 { color: #ffffff; }
+        h1, h2, h3 { color: #ffffff; }
         .dashboard { 
             display: flex; 
             gap: 20px; 
@@ -47,6 +47,13 @@
             margin-bottom: 20px; 
             flex-wrap: wrap; 
             align-items: center; 
+        }
+        .filter-panel {
+            background-color: #252525;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #333;
         }
         input, select { 
             padding: 10px; 
@@ -87,7 +94,7 @@
         .btn-logout { background-color: #7f8c8d; }
         .btn-logout:hover { background-color: #636e72; }
         
-        ::placeholder { color: #999; }
+        ::placeholder { color: #777; }
     </style>
 </head>
 <body>
@@ -122,7 +129,7 @@
         </div>
     </div>
 
-    <h2>Adaugă Cheltuială</h2>
+    <h2 id="formTitle">Adaugă Cheltuială</h2>
     <form id="expenseForm">
         <div class="form-group">
             <input type="month" id="expenseMonth" required>
@@ -148,10 +155,40 @@
                 <input type="checkbox" id="isPaid"> Achitat acum
             </label>
             <button type="submit" id="saveBtn">Salvează</button>
+            <button type="button" id="cancelEditBtn" style="display: none; background-color: #e67e22;" onclick="cancelEdit()">Anulează Editarea</button>
         </div>
     </form>
 
     <h2>Registru Cheltuieli</h2>
+    
+    <div class="filter-panel">
+        <h3 style="margin-top: 0; font-size: 1.1em; color: #3498db;">🔍 Zone de Filtrare și Căutare Rapidă</h3>
+        <div class="form-group" style="margin-bottom: 0;">
+            <input type="text" id="filterSearch" placeholder="Caută comerciant sau comentarii..." style="width: 250px;">
+            
+            <select id="filterCategory">
+                <option value="ALL">Toate Categoriile</option>
+                <option value="1">Cat 1 - Fixe constante</option>
+                <option value="2">Cat 2 - Variabile</option>
+                <option value="3">Cat 3 - Neprevăzute</option>
+            </select>
+            
+            <select id="filterStatus">
+                <option value="ALL">Toate Statusurile</option>
+                <option value="PAID">Doar Achitate (Da)</option>
+                <option value="UNPAID">Doar Neachitate (Nu)</option>
+            </select>
+            
+            <input type="number" id="filterMinAmount" placeholder="Suma minimă" step="0.01" style="width: 120px;">
+            <input type="number" id="filterMaxAmount" placeholder="Suma maximă" step="0.01" style="width: 120px;">
+            
+            <select id="filterMonthScope">
+                <option value="SELECTED">Doar luna selectată sus</option>
+                <option value="ALL">Toate lunile din istoric</option>
+            </select>
+        </div>
+    </div>
+
     <table>
         <thead>
             <tr>
@@ -185,10 +222,13 @@
     
     let expenses = [];
     let expenseChartInstance = null;
+    let editingExpenseId = null;
+    let existingFileUrl = null;
 
     document.addEventListener('DOMContentLoaded', () => {
         checkSession();
         toggleRateFields();
+        setupFilterListeners();
     });
 
     const catSelect = document.getElementById('category');
@@ -205,6 +245,15 @@
     }
 
     catSelect.addEventListener('change', toggleRateFields);
+
+    function setupFilterListeners() {
+        document.getElementById('filterSearch').addEventListener('input', renderUI);
+        document.getElementById('filterCategory').addEventListener('change', renderUI);
+        document.getElementById('filterStatus').addEventListener('change', renderUI);
+        document.getElementById('filterMinAmount').addEventListener('input', renderUI);
+        document.getElementById('filterMaxAmount').addEventListener('input', renderUI);
+        document.getElementById('filterMonthScope').addEventListener('change', renderUI);
+    }
 
     async function checkSession() {
         const { data: { session } } = await supabaseClient.auth.getSession();
@@ -291,7 +340,7 @@
         saveBtn.innerText = 'Se salvează...';
         saveBtn.disabled = true;
 
-        let uploadedFileUrl = null;
+        let uploadedFileUrl = existingFileUrl; 
         const fileInput = document.getElementById('fileUpload');
         
         if (fileInput.files.length > 0) {
@@ -305,7 +354,7 @@
                 const { data: publicUrlData } = supabaseClient.storage.from('facturi').getPublicUrl(fileName);
                 uploadedFileUrl = publicUrlData.publicUrl;
             } else {
-                alert("A apărut o eroare la încărcarea facturii.");
+                alert("A apărut o eroare la încărcarea facturii în Storage.");
             }
         }
         
@@ -324,22 +373,78 @@
             file_url: uploadedFileUrl
         };
         
-        await supabaseClient.from('cheltuieli').insert([exp]);
-        
-        if (exp.is_paid) {
-            await handleNextRateRollover(exp);
+        if (editingExpenseId) {
+            const { error } = await supabaseClient.from('cheltuieli').update(exp).eq('id', editingExpenseId);
+            if (error) {
+                alert("Eroare la actualizarea cheltuielii.");
+            } else {
+                if (exp.is_paid) {
+                    await handleNextRateRollover(exp);
+                }
+                cancelEdit();
+            }
+        } else {
+            const { error } = await supabaseClient.from('cheltuieli').insert([exp]);
+            if (error) {
+                alert("Eroare la salvarea cheltuielii.");
+            } else {
+                if (exp.is_paid) {
+                    await handleNextRateRollover(exp);
+                }
+                const currentMonth = document.getElementById('expenseMonth').value;
+                this.reset();
+                document.getElementById('expenseMonth').value = currentMonth;
+                toggleRateFields();
+            }
         }
         
         fetchExpenses();
-        
-        const currentMonth = document.getElementById('expenseMonth').value;
-        this.reset();
-        document.getElementById('expenseMonth').value = currentMonth;
-        toggleRateFields();
-        
-        saveBtn.innerText = 'Salvează';
         saveBtn.disabled = false;
     });
+
+    function startEdit(id) {
+        const exp = expenses.find(e => e.id === id);
+        if (!exp) return;
+        
+        editingExpenseId = id;
+        existingFileUrl = exp.file_url;
+        
+        document.getElementById('formTitle').innerText = 'Editează Cheltuiala';
+        document.getElementById('expenseMonth').value = exp.month_val;
+        document.getElementById('merchant').value = exp.merchant;
+        document.getElementById('category').value = exp.category;
+        document.getElementById('amount').value = exp.amount;
+        document.getElementById('comments').value = exp.comments || '';
+        document.getElementById('isPaid').checked = exp.is_paid;
+        
+        if (exp.category === '1') {
+            document.getElementById('currentRate').value = exp.current_rate || '';
+            document.getElementById('totalRates').value = exp.total_rates || '';
+        } else {
+            document.getElementById('currentRate').value = '';
+            document.getElementById('totalRates').value = '';
+        }
+        
+        toggleRateFields();
+        
+        document.getElementById('saveBtn').innerText = 'Actualizează';
+        document.getElementById('cancelEditBtn').style.display = 'inline-block';
+        
+        document.getElementById('expenseForm').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function cancelEdit() {
+        editingExpenseId = null;
+        existingFileUrl = null;
+        
+        document.getElementById('formTitle').innerText = 'Adaugă Cheltuială';
+        document.getElementById('expenseForm').reset();
+        document.getElementById('expenseMonth').value = new Date().toISOString().slice(0, 7);
+        toggleRateFields();
+        
+        document.getElementById('saveBtn').innerText = 'Salvează';
+        document.getElementById('cancelEditBtn').style.display = 'none';
+    }
 
     async function togglePaid(id, currentStatus) {
         const nextStatus = !currentStatus;
@@ -356,18 +461,58 @@
     }
 
     async function deleteExpense(id) {
-        await supabaseClient.from('cheltuieli').delete().eq('id', id);
-        fetchExpenses();
+        if(confirm("Sigur vrei să ștergi această înregistrare?")) {
+            await supabaseClient.from('cheltuieli').delete().eq('id', id);
+            fetchExpenses();
+        }
     }
 
     function renderUI() {
         const tbody = document.getElementById('expenseTableBody');
         tbody.innerHTML = '';
+        
         let total = 0;
         let paid = 0;
         const selectedMonth = document.getElementById('expenseMonth').value;
 
         expenses.forEach(exp => {
+            if (exp.month_val === selectedMonth) {
+                total += exp.amount;
+                if (exp.is_paid) paid += exp.amount;
+            }
+        });
+
+        document.getElementById('totalAmount').innerText = total.toFixed(2);
+        document.getElementById('paidAmount').innerText = paid.toFixed(2);
+        document.getElementById('remainingAmount').innerText = (total - paid).toFixed(2);
+
+        const searchVal = document.getElementById('filterSearch').value.toLowerCase();
+        const catVal = document.getElementById('filterCategory').value;
+        const statusVal = document.getElementById('filterStatus').value;
+        const minAmt = parseFloat(document.getElementById('filterMinAmount').value) || 0;
+        const maxAmt = parseFloat(document.getElementById('filterMaxAmount').value) || Infinity;
+        const monthScope = document.getElementById('filterMonthScope').value;
+
+        const filteredExpenses = expenses.filter(exp => {
+            if (monthScope === 'SELECTED' && exp.month_val !== selectedMonth) return false;
+            
+            if (catVal !== 'ALL' && exp.category !== catVal) return false;
+            
+            if (statusVal === 'PAID' && !exp.is_paid) return false;
+            if (statusVal === 'UNPAID' && exp.is_paid) return false;
+            
+            if (exp.amount < minAmt || exp.amount > maxAmt) return false;
+            
+            if (searchVal) {
+                const mMatch = exp.merchant ? exp.merchant.toLowerCase().includes(searchVal) : false;
+                const cMatch = exp.comments ? exp.comments.toLowerCase().includes(searchVal) : false;
+                if (!mMatch && !cMatch) return false;
+            }
+            
+            return true;
+        });
+
+        filteredExpenses.forEach(exp => {
             const tr = document.createElement('tr');
             
             let rateBadge = '';
@@ -390,19 +535,14 @@
                     <input type="checkbox" ${exp.is_paid ? 'checked' : ''} onchange="togglePaid(${exp.id}, ${exp.is_paid})">
                     ${exp.is_paid ? 'Da' : 'Nu'}
                 </td>
-                <td><button style="background-color: #e74c3c;" onclick="deleteExpense(${exp.id})">Șterge</button></td>
+                <td>
+                    <button style="background-color: #2980b9; padding: 5px 10px; font-size:0.9em; margin-right: 5px;" onclick="startEdit(${exp.id})">Editează</button>
+                    <button style="background-color: #e74c3c; padding: 5px 10px; font-size:0.9em;" onclick="deleteExpense(${exp.id})">Șterge</button>
+                </td>
             `;
             tbody.appendChild(tr);
-
-            if (exp.month_val === selectedMonth) {
-                total += exp.amount;
-                if (exp.is_paid) paid += exp.amount;
-            }
         });
 
-        document.getElementById('totalAmount').innerText = total.toFixed(2);
-        document.getElementById('paidAmount').innerText = paid.toFixed(2);
-        document.getElementById('remainingAmount').innerText = (total - paid).toFixed(2);
         updateChart();
     }
 
@@ -429,7 +569,7 @@
                 labels: allMonths,
                 datasets: [
                     { label: 'Fixe', data: cat1Data, backgroundColor: '#34495e' },
-                    { label: 'Variabile', data: data => cat2Data, backgroundColor: '#f1c40f' },
+                    { label: 'Variabile', data: cat2Data, backgroundColor: '#f1c40f' },
                     { label: 'Neprevăzute', data: cat3Data, backgroundColor: '#e74c3c' }
                 ]
             },
