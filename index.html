@@ -41,7 +41,6 @@
         .bg-paid { background-color: #1e8449; }
         .bg-remaining { background-color: #c0392b; }
         
-        /* Stiluri Meniu Tab-uri */
         .tab-navigation {
             display: flex;
             gap: 10px;
@@ -312,17 +311,15 @@
         setupConverterListeners();
     });
 
-    // Functie de comutare intre tab-uri
     function switchTab(tabId) {
-        // Schimbam clasa activa pe butoane
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-        event.target.classList.add('active');
+        if (event && event.target) {
+            event.target.classList.add('active');
+        }
 
-        // Schimbam clasa activa pe panourile de continut
         document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
         document.getElementById('tab-' + tabId).classList.add('active');
 
-        // Daca comutam pe grafice, fortam redesenarea canvasului pentru a evita bug-urile de dimensiune
         if (tabId === 'charts') {
             setTimeout(updateChart, 50);
         }
@@ -369,7 +366,7 @@
                 }
             }
         } catch (error) {
-            console.log("Nu s-au putut prelua ratele live. Se folosesc valorile sigure de fallback.");
+            console.log("Nu s-au putut prelua ratele live. Se folosesc valorile de fallback.");
         }
         runConversion();
     }
@@ -648,4 +645,87 @@
             if (exp.amount < minAmt || exp.amount > maxAmt) return false;
             
             if (searchVal) {
-                const mMatch = exp.merchant ? exp.merchant.toLowerCase().includes(
+                const mMatch = exp.merchant ? exp.merchant.toLowerCase().includes(searchVal) : false;
+                const cMatch = exp.comments ? exp.comments.toLowerCase().includes(searchVal) : false;
+                if (!mMatch && !cMatch) return false;
+            }
+            
+            return true;
+        });
+
+        filteredExpenses.forEach(exp => {
+            const tr = document.createElement('tr');
+            const isExcluded = excludedIds.includes(exp.id);
+            
+            if (isExcluded) {
+                tr.style.cssText = "opacity: 0.35; background-color: #221a1a;";
+            }
+            
+            let rateBadge = '';
+            if (exp.category === '1' && exp.current_rate && exp.total_rates) {
+                rateBadge = `<span style="font-size: 0.85em; color: #f39c12; margin-left: 8px;">- Rata ${exp.current_rate} din ${exp.total_rates}</span>`;
+            }
+            
+            let fileLink = '';
+            if (exp.file_url) {
+                fileLink = `<br><a href="${exp.file_url}" target="_blank" style="color: #3498db; text-decoration: none; font-size: 0.85em;">📄 Vezi Factura / QR</a>`;
+            }
+
+            tr.innerHTML = `
+                <td>${exp.month_val}</td>
+                <td><strong>${exp.merchant}</strong>${rateBadge}${fileLink}</td>
+                <td>Cat ${exp.category}</td>
+                <td>${exp.amount.toFixed(2)}</td>
+                <td style="max-width: 250px; overflow-wrap: break-word; word-break: break-word; white-space: normal;">${exp.comments || ''}</td>
+                <td>
+                    <input type="checkbox" ${exp.is_paid ? 'checked' : ''} onchange="togglePaid(${exp.id}, ${exp.is_paid})">
+                    ${exp.is_paid ? 'Da' : 'Nu'}
+                </td>
+                <td style="text-align: center;">
+                    <input type="checkbox" ${isExcluded ? 'checked' : ''} onchange="toggleExclude(${exp.id})" style="transform: scale(1.2); cursor: pointer;">
+                </td>
+                <td>
+                    <button style="background-color: #2980b9; padding: 5px 10px; font-size:0.9em; margin-right: 5px;" onclick="startEdit(${exp.id})">Editează</button>
+                    <button style="background-color: #e74c3c; padding: 5px 10px; font-size:0.9em;" onclick="deleteExpense(${exp.id})">Șterge</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    document.getElementById('expenseMonth').addEventListener('change', renderUI);
+
+    function updateChart() {
+        const canvas = document.getElementById('expenseChart');
+        if (!canvas) return;
+
+        const monthsToAnalyze = parseInt(document.getElementById('chartMonths').value) || 6;
+        const allMonths = [...new Set(expenses.map(e => e.month_val))].sort().slice(-monthsToAnalyze);
+        const cat1Data = []; const cat2Data = []; const cat3Data = [];
+
+        allMonths.forEach(m => {
+            const mExp = expenses.filter(e => e.month_val === m && !excludedIds.includes(e.id));
+            cat1Data.push(mExp.filter(e => e.category === "1").reduce((s, e) => s + e.amount, 0));
+            cat2Data.push(mExp.filter(e => e.category === "2").reduce((s, e) => s + e.amount, 0));
+            cat3Data.push(mExp.filter(e => e.category === "3").reduce((s, e) => s + e.amount, 0));
+        });
+
+        const ctx = canvas.getContext('2d');
+        if (expenseChartInstance) expenseChartInstance.destroy();
+
+        expenseChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: allMonths,
+                datasets: [
+                    { label: 'Fixe', data: cat1Data, backgroundColor: '#34495e' },
+                    { label: 'Variabile', data: cat2Data, backgroundColor: '#f1c40f' },
+                    { label: 'Neprevăzute', data: cat3Data, backgroundColor: '#e74c3c' }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }
+        });
+    }
+</script>
+</body>
+</html>
