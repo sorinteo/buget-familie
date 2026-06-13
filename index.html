@@ -196,7 +196,7 @@
                 <th>Comerciant</th>
                 <th>Categorie</th>
                 <th>Sumă</th>
-                <th>Comentarii</th>
+                <th style="max-width: 250px;">Comentarii</th>
                 <th>Plătit</th>
                 <th>Acțiuni</th>
             </tr>
@@ -530,7 +530,7 @@
                 <td><strong>${exp.merchant}</strong>${rateBadge}${fileLink}</td>
                 <td>Cat ${exp.category}</td>
                 <td>${exp.amount.toFixed(2)}</td>
-                <td>${exp.comments || ''}</td>
+                <td style="max-width: 250px; overflow-wrap: break-word; word-break: break-word; white-space: normal;">${exp.comments || ''}</td>
                 <td>
                     <input type="checkbox" ${exp.is_paid ? 'checked' : ''} onchange="togglePaid(${exp.id}, ${exp.is_paid})">
                     ${exp.is_paid ? 'Da' : 'Nu'}
