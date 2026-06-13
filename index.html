@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Management Cheltuieli</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Buget Familie</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-body { 
+        body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
             background-color: #121212; 
             padding: 20px; 
@@ -88,218 +88,321 @@ body {
         .btn-logout:hover { background-color: #636e72; }
         
         ::placeholder { color: #999; }
-            </style>
+    </style>
 </head>
 <body>
 
-    <div id="loginSection" class="container">
-        <h2>Autentificare</h2>
-        <form id="loginForm" class="form-group" style="flex-direction: column; align-items: flex-start;">
-            <input type="email" id="email" placeholder="Adresa de email" required style="width: 300px;">
-            <input type="password" id="password" placeholder="Parola" required style="width: 300px;">
-            <button type="submit" style="width: 300px;">Intră în cont</button>
-        </form>
+<div id="loginSection" class="container" style="max-width: 400px; margin-top: 100px;">
+    <h2>Autentificare</h2>
+    <form id="loginForm" style="display: flex; flex-direction: column; gap: 15px;">
+        <input type="email" id="email" placeholder="Adresa de email" required>
+        <input type="password" id="password" placeholder="Parola" required>
+        <button type="submit">Intră în cont</button>
+    </form>
+</div>
+
+<div id="appSection" class="container" style="display: none;">
+    <div class="header-bar">
+        <h1>Management Cheltuieli Lunare</h1>
+        <button class="btn-logout" onclick="logout()">Deconectare</button>
     </div>
 
-    <div id="appSection" class="container" style="display: none;">
-        <div class="header-bar">
-            <h1>Management Cheltuieli Lunare</h1>
-            <button class="btn-logout" onclick="logout()">Deconectare</button>
+    <div class="dashboard">
+        <div class="card bg-total">
+            Total lună selectată:<br>
+            <span id="totalAmount">0.00</span>
         </div>
-
-        <div class="dashboard">
-            <div class="card bg-total">Total lună selectată: <br><span id="totalAmount">0.00</span></div>
-            <div class="card bg-paid">Plătit: <br><span id="paidAmount">0.00</span></div>
-            <div class="card bg-remaining">Rest de plată: <br><span id="remainingAmount">0.00</span></div>
+        <div class="card bg-paid">
+            Plătit:<br>
+            <span id="paidAmount">0.00</span>
         </div>
+        <div class="card bg-remaining">
+            Rest de plată:<br>
+            <span id="remainingAmount">0.00</span>
+        </div>
+    </div>
 
-        <h2>Adaugă Cheltuială</h2>
-        <form id="expenseForm" class="form-group">
+    <h2>Adaugă Cheltuială</h2>
+    <form id="expenseForm">
+        <div class="form-group">
             <input type="month" id="expenseMonth" required>
             <input type="text" id="merchant" placeholder="Comerciant" required>
-            <select id="category" required>
+            <select id="category">
                 <option value="1">Cat 1 - Fixe constante</option>
-                <option value="2">Cat 2 - Variabile constante</option>
+                <option value="2">Cat 2 - Variabile</option>
                 <option value="3">Cat 3 - Neprevăzute</option>
             </select>
             <input type="number" id="amount" placeholder="Sumă" step="0.01" required>
-            <input type="text" id="comments" placeholder="Comentarii">
-            <div class="checkbox-container">
-                <input type="checkbox" id="isPaid">
-                <label for="isPaid">Achitat acum</label>
-            </div>
-            <button type="submit">Salvează</button>
-        </form>
-
-        <h2>Registru Cheltuieli</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Luna</th>
-                    <th>Comerciant</th>
-                    <th>Categorie</th>
-                    <th>Sumă</th>
-                    <th>Comentarii</th>
-                    <th>Plătit</th>
-                    <th>Acțiuni</th>
-                </tr>
-            </thead>
-            <tbody id="expenseTableBody"></tbody>
-        </table>
-
-        <hr>
-
-        <div class="chart-container">
-            <h2>Evoluție Grafică</h2>
-            <div class="form-group">
-                <label for="chartMonths">Număr de luni:</label>
-                <input type="number" id="chartMonths" value="6" min="1" max="60">
-                <button type="button" onclick="updateChart()">Generează Grafic</button>
-            </div>
-            <canvas id="expenseChart"></canvas>
         </div>
-    </div>
-
-    <script>
-	    const supabaseUrl = 'https://qvfcsvhofkzcprxatnhu.supabase.co';
-        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2ZmNzdmhvZmt6Y3ByeGF0bmh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzM3MDAsImV4cCI6MjA5Njg0OTcwMH0.zJRZvAHFKUhdrpuB3h1WiolbM6OlfaX_djCVKtPLXUc';
-        const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
         
-        let expenses = [];
-        let expenseChartInstance = null;
+        <div class="form-group" id="rateFields" style="display: flex;">
+            <input type="number" id="currentRate" placeholder="Rata curentă" min="1" style="width: 140px;">
+            <span style="color: white;">din</span>
+            <input type="number" id="totalRates" placeholder="Total rate" min="1" style="width: 140px;">
+        </div>
 
-        document.addEventListener('DOMContentLoaded', checkSession);
+        <div class="form-group">
+            <input type="text" id="comments" placeholder="Comentarii" style="flex-grow: 1;">
+            <label class="checkbox-container">
+                <input type="checkbox" id="isPaid"> Achitat acum
+            </label>
+            <button type="submit">Salvează</button>
+        </div>
+    </form>
 
-        async function checkSession() {
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            if (session) {
-                document.getElementById('loginSection').style.display = 'none';
-                document.getElementById('appSection').style.display = 'block';
-                document.getElementById('expenseMonth').value = new Date().toISOString().slice(0, 7);
-                fetchExpenses();
+    <h2>Registru Cheltuieli</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Luna</th>
+                <th>Comerciant</th>
+                <th>Categorie</th>
+                <th>Sumă</th>
+                <th>Comentarii</th>
+                <th>Plătit</th>
+                <th>Acțiuni</th>
+            </tr>
+        </thead>
+        <tbody id="expenseTableBody"></tbody>
+    </table>
+
+    <div class="chart-container">
+        <h2>Evoluție Grafică</h2>
+        <div class="form-group">
+            <label for="chartMonths">Număr de luni:</label>
+            <input type="number" id="chartMonths" value="6" min="1" max="60" style="width: 80px;">
+            <button type="button" onclick="updateChart()">Generează Grafic</button>
+        </div>
+        <canvas id="expenseChart"></canvas>
+    </div>
+</div>
+
+<script>
+    const supabaseUrl = 'https://qvfcsvhofkzcprxatnhu.supabase.co';
+    const supabaseKey = 'INTRODU_AICI_CHEIA_TA_LUNGA';
+    const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+    
+    let expenses = [];
+    let expenseChartInstance = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        checkSession();
+        toggleRateFields();
+    });
+
+    const catSelect = document.getElementById('category');
+    const rateDiv = document.getElementById('rateFields');
+
+    function toggleRateFields() {
+        if(catSelect.value === '1') {
+            rateDiv.style.display = 'flex';
+        } else {
+            rateDiv.style.display = 'none';
+            document.getElementById('currentRate').value = '';
+            document.getElementById('totalRates').value = '';
+        }
+    }
+
+    catSelect.addEventListener('change', toggleRateFields);
+
+    async function checkSession() {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('appSection').style.display = 'block';
+            document.getElementById('expenseMonth').value = new Date().toISOString().slice(0, 7);
+            fetchExpenses();
+        }
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const { error } = await supabaseClient.auth.signInWithPassword({ email: email, password: password });
+        
+        if (error) {
+            alert("Eroare la autentificare. Verifică datele introduse.");
+        } else {
+            checkSession();
+        }
+    });
+
+    async function logout() {
+        await supabaseClient.auth.signOut();
+        window.location.reload();
+    }
+
+    async function fetchExpenses() {
+        const { data, error } = await supabaseClient.from('cheltuieli').select('*').order('id', { ascending: false });
+        if (!error && data) {
+            expenses = data;
+            renderUI();
+        }
+    }
+
+    function getNextMonthStr(monthVal) {
+        let parts = monthVal.split('-');
+        let year = parseInt(parts[0]);
+        let month = parseInt(parts[1]);
+        
+        month++;
+        if (month > 12) {
+            month = 1;
+            year++;
+        }
+        
+        let monthStr = month < 10 ? '0' + month : month;
+        return year + '-' + monthStr;
+    }
+
+    async function handleNextRateRollover(exp) {
+        if (exp.category === '1' && exp.current_rate && exp.total_rates && exp.current_rate < exp.total_rates) {
+            const nextMonth = getNextMonthStr(exp.month_val);
+            
+            const { data: existing, error } = await supabaseClient.from('cheltuieli')
+                .select('id')
+                .eq('month_val', nextMonth)
+                .eq('merchant', exp.merchant)
+                .eq('current_rate', exp.current_rate + 1);
+                
+            if (!error && (!existing || existing.length === 0)) {
+                const nextExp = {
+                    month_val: nextMonth,
+                    merchant: exp.merchant,
+                    category: exp.category,
+                    amount: exp.amount,
+                    comments: exp.comments || '',
+                    is_paid: false,
+                    current_rate: exp.current_rate + 1,
+                    total_rates: exp.total_rates
+                };
+                await supabaseClient.from('cheltuieli').insert([nextExp]);
             }
         }
+    }
 
-        document.getElementById('loginForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            const { error } = await supabaseClient.auth.signInWithPassword({ email: email, password: password });
+    document.getElementById('expenseForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const currentRateVal = document.getElementById('currentRate').value;
+        const totalRatesVal = document.getElementById('totalRates').value;
+
+        const exp = {
+            month_val: document.getElementById('expenseMonth').value,
+            merchant: document.getElementById('merchant').value,
+            category: document.getElementById('category').value,
+            amount: parseFloat(document.getElementById('amount').value),
+            comments: document.getElementById('comments').value,
+            is_paid: document.getElementById('isPaid').checked,
+            current_rate: currentRateVal ? parseInt(currentRateVal) : null,
+            total_rates: totalRatesVal ? parseInt(totalRatesVal) : null
+        };
+        
+        await supabaseClient.from('cheltuieli').insert([exp]);
+        
+        if (exp.is_paid) {
+            await handleNextRateRollover(exp);
+        }
+        
+        fetchExpenses();
+        
+        const currentMonth = document.getElementById('expenseMonth').value;
+        this.reset();
+        document.getElementById('expenseMonth').value = currentMonth;
+        toggleRateFields();
+    });
+
+    async function togglePaid(id, currentStatus) {
+        const nextStatus = !currentStatus;
+        await supabaseClient.from('cheltuieli').update({ is_paid: nextStatus }).eq('id', id);
+        
+        if (nextStatus) {
+            const exp = expenses.find(e => e.id === id);
+            if (exp) {
+                await handleNextRateRollover(exp);
+            }
+        }
+        
+        fetchExpenses();
+    }
+
+    async function deleteExpense(id) {
+        await supabaseClient.from('cheltuieli').delete().eq('id', id);
+        fetchExpenses();
+    }
+
+    function renderUI() {
+        const tbody = document.getElementById('expenseTableBody');
+        tbody.innerHTML = '';
+        let total = 0;
+        let paid = 0;
+        const selectedMonth = document.getElementById('expenseMonth').value;
+
+        expenses.forEach(exp => {
+            const tr = document.createElement('tr');
             
-            if (error) {
-                alert("Eroare la autentificare. Verifică datele introduse.");
-            } else {
-                checkSession();
+            let rateBadge = '';
+            if (exp.category === '1' && exp.current_rate && exp.total_rates) {
+                rateBadge = `<span style="font-size: 0.85em; color: #f39c12; margin-left: 8px;">- Rata ${exp.current_rate} din ${exp.total_rates}</span>`;
+            }
+
+            tr.innerHTML = `
+                <td>${exp.month_val}</td>
+                <td><strong>${exp.merchant}</strong>${rateBadge}</td>
+                <td>Cat ${exp.category}</td>
+                <td>${exp.amount.toFixed(2)}</td>
+                <td>${exp.comments || ''}</td>
+                <td>
+                    <input type="checkbox" ${exp.is_paid ? 'checked' : ''} onchange="togglePaid(${exp.id}, ${exp.is_paid})">
+                    ${exp.is_paid ? 'Da' : 'Nu'}
+                </td>
+                <td><button style="background-color: #e74c3c;" onclick="deleteExpense(${exp.id})">Șterge</button></td>
+            `;
+            tbody.appendChild(tr);
+
+            if (exp.month_val === selectedMonth) {
+                total += exp.amount;
+                if (exp.is_paid) paid += exp.amount;
             }
         });
 
-        async function logout() {
-            await supabaseClient.auth.signOut();
-            window.location.reload();
-        }
+        document.getElementById('totalAmount').innerText = total.toFixed(2);
+        document.getElementById('paidAmount').innerText = paid.toFixed(2);
+        document.getElementById('remainingAmount').innerText = (total - paid).toFixed(2);
+        updateChart();
+    }
 
-        async function fetchExpenses() {
-            const { data, error } = await supabaseClient.from('cheltuieli').select('*').order('id', { ascending: false });
-            if (!error && data) {
-                expenses = data;
-                renderUI();
-            }
-        }
+    document.getElementById('expenseMonth').addEventListener('change', renderUI);
 
-        document.getElementById('expenseForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const exp = {
-                month_val: document.getElementById('expenseMonth').value,
-                merchant: document.getElementById('merchant').value,
-                category: document.getElementById('category').value,
-                amount: parseFloat(document.getElementById('amount').value),
-                comments: document.getElementById('comments').value,
-                is_paid: document.getElementById('isPaid').checked
-            };
-            
-            await supabaseClient.from('cheltuieli').insert([exp]);
-            fetchExpenses();
-            
-            const currentMonth = document.getElementById('expenseMonth').value;
-            this.reset();
-            document.getElementById('expenseMonth').value = currentMonth;
+    function updateChart() {
+        const monthsToAnalyze = parseInt(document.getElementById('chartMonths').value) || 6;
+        const allMonths = [...new Set(expenses.map(e => e.month_val))].sort().slice(-monthsToAnalyze);
+        const cat1Data = []; const cat2Data = []; const cat3Data = [];
+
+        allMonths.forEach(m => {
+            const mExp = expenses.filter(e => e.month_val === m);
+            cat1Data.push(mExp.filter(e => e.category === "1").reduce((s, e) => s + e.amount, 0));
+            cat2Data.push(mExp.filter(e => e.category === "2").reduce((s, e) => s + e.amount, 0));
+            cat3Data.push(mExp.filter(e => e.category === "3").reduce((s, e) => s + e.amount, 0));
         });
 
-        async function togglePaid(id, currentStatus) {
-            await supabaseClient.from('cheltuieli').update({ is_paid: !currentStatus }).eq('id', id);
-            fetchExpenses();
-        }
+        const ctx = document.getElementById('expenseChart').getContext('2d');
+        if (expenseChartInstance) expenseChartInstance.destroy();
 
-        async function deleteExpense(id) {
-            await supabaseClient.from('cheltuieli').delete().eq('id', id);
-            fetchExpenses();
-        }
-
-        function renderUI() {
-            const tbody = document.getElementById('expenseTableBody');
-            tbody.innerHTML = '';
-            let total = 0;
-            let paid = 0;
-            const selectedMonth = document.getElementById('expenseMonth').value;
-
-            expenses.forEach(exp => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${exp.month_val}</td>
-                    <td><strong>${exp.merchant}</strong></td>
-                    <td>Cat ${exp.category}</td>
-                    <td>${exp.amount.toFixed(2)}</td>
-                    <td>${exp.comments || ''}</td>
-                    <td>
-                        <input type="checkbox" ${exp.is_paid ? 'checked' : ''} onchange="togglePaid(${exp.id}, ${exp.is_paid})">
-                        ${exp.is_paid ? 'Da' : 'Nu'}
-                    </td>
-                    <td><button style="background-color: #e74c3c;" onclick="deleteExpense(${exp.id})">Șterge</button></td>
-                `;
-                tbody.appendChild(tr);
-
-                if (exp.month_val === selectedMonth) {
-                    total += exp.amount;
-                    if (exp.is_paid) paid += exp.amount;
-                }
-            });
-
-            document.getElementById('totalAmount').innerText = total.toFixed(2);
-            document.getElementById('paidAmount').innerText = paid.toFixed(2);
-            document.getElementById('remainingAmount').innerText = (total - paid).toFixed(2);
-            updateChart();
-        }
-
-        document.getElementById('expenseMonth').addEventListener('change', renderUI);
-
-        function updateChart() {
-            const monthsToAnalyze = parseInt(document.getElementById('chartMonths').value) || 6;
-            const allMonths = [...new Set(expenses.map(e => e.month_val))].sort().slice(-monthsToAnalyze);
-            const cat1Data = []; const cat2Data = []; const cat3Data = [];
-
-            allMonths.forEach(m => {
-                const mExp = expenses.filter(e => e.month_val === m);
-                cat1Data.push(mExp.filter(e => e.category === "1").reduce((s, e) => s + e.amount, 0));
-                cat2Data.push(mExp.filter(e => e.category === "2").reduce((s, e) => s + e.amount, 0));
-                cat3Data.push(mExp.filter(e => e.category === "3").reduce((s, e) => s + e.amount, 0));
-            });
-
-            const ctx = document.getElementById('expenseChart').getContext('2d');
-            if (expenseChartInstance) expenseChartInstance.destroy();
-
-            expenseChartInstance = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: allMonths,
-                    datasets: [
-                        { label: 'Fixe', data: cat1Data, backgroundColor: '#34495e' },
-                        { label: 'Variabile', data: cat2Data, backgroundColor: '#f1c40f' },
-                        { label: 'Neprevăzute', data: cat3Data, backgroundColor: '#e74c3c' }
-                    ]
-                },
-                options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true } } }
-            });
-        }
-    </script>
+        expenseChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: allMonths,
+                datasets: [
+                    { label: 'Fixe', data: cat1Data, backgroundColor: '#34495e' },
+                    { label: 'Variabile', data: data => cat2Data, backgroundColor: '#f1c40f' },
+                    { label: 'Neprevăzute', data: cat3Data, backgroundColor: '#e74c3c' }
+                ]
+            },
+            options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true } } }
+        });
+    }
+</script>
 </body>
 </html>
