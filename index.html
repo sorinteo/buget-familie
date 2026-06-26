@@ -586,7 +586,8 @@
             if (error) {
                 alert("Eroare la actualizarea cheltuielii.");
             } else {
-                if (exp.is_paid) {
+                // La editare/actualizare, perpetuăm automat dacă e marcată ca plătită sau dacă este permanentă/recurentă
+                if (exp.category === '4' || (exp.category === '1' && !exp.total_rates) || exp.is_paid) {
                     await handleNextRateRollover(exp);
                 }
                 cancelEdit();
@@ -596,9 +597,14 @@
             if (error) {
                 alert("Eroare la salvarea cheltuielii.");
             } else {
-                if (exp.is_paid) {
+                // LOGICA UPGRADE: La adăugare proaspătă, dacă este permanentă (Cat 1 fără rate) sau recurentă periodică (Cat 4), 
+                // se propagă automat pe luna următoare fără să mai aștepte statusul de plată. Ratele fixe așteaptă în continuare bifa.
+                if (exp.category === '4' || (exp.category === '1' && !exp.total_rates)) {
+                    await handleNextRateRollover(exp);
+                } else if (exp.is_paid) {
                     await handleNextRateRollover(exp);
                 }
+                
                 const currentMonth = document.getElementById('expenseMonth').value;
                 this.reset();
                 document.getElementById('expenseMonth').value = currentMonth;
@@ -781,6 +787,8 @@
             let rateBadge = '';
             if (exp.category === '1' && exp.current_rate && exp.total_rates) {
                 rateBadge = `<span style="font-size: 0.85em; color: #f39c12; margin-left: 8px; text-decoration: none !important; display: inline-block;">- Rata ${exp.current_rate} din ${exp.total_rates}</span>`;
+            } else if (exp.category === '1' && !exp.total_rates) {
+                rateBadge = `<span style="font-size: 0.85em; color: #3498db; margin-left: 8px; text-decoration: none !important; display: inline-block;">- Permanent</span>`;
             } else if (exp.category === '4' && exp.total_rates) {
                 rateBadge = `<span style="font-size: 0.85em; color: #9b59b6; margin-left: 8px; text-decoration: none !important; display: inline-block;">- Recurent la ${exp.total_rates} luni</span>`;
             }
