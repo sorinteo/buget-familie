@@ -202,6 +202,7 @@
                 <input type="number" id="currentRate" placeholder="Rata curentă" min="1" style="width: 140px;">
                 <span style="color: white;">din</span>
                 <input type="number" id="totalRates" placeholder="Total rate" min="1" style="width: 140px;">
+                <span style="color: #aaa; font-size: 0.85em; margin-left: 10px;">(Lasă goale pentru cheltuieli permanente gen Chirie)</span>
             </div>
 
             <div class="form-group" id="periodicFields" style="display: none;">
@@ -322,7 +323,6 @@
     let editingExpenseId = null;
     let existingFileUrl = null;
 
-    // State sortare global
     let sortCol = 'id';
     let sortAsc = false;
 
@@ -465,14 +465,34 @@
     }
 
     async function handleNextRateRollover(exp) {
-        if (exp.category === '1' && exp.current_rate && exp.total_rates && exp.current_rate < exp.total_rates) {
+        // Cazul 1: Fixe constante (Cat 1) CU numar finit de rate
+        if (exp.category === '1' && exp.current_rate && exp.total_rates) {
+            if (exp.current_rate < exp.total_rates) {
+                const nextMonth = getNextMonthStr(exp.month_val, 1);
+                const { data: existing, error } = await supabaseClient.from('cheltuieli')
+                    .select('id').eq('month_val', nextMonth).eq('merchant', exp.merchant).eq('current_rate', exp.current_rate + 1);
+                    
+                if (!error && (!existing || existing.length === 0)) {
+                    const nextExp = {
+                        month_val: nextMonth,
+                        merchant: exp.merchant,
+                        category: exp.category,
+                        amount: exp.amount,
+                        comments: exp.comments || '',
+                        is_paid: false,
+                        current_rate: exp.current_rate + 1,
+                        total_rates: exp.total_rates,
+                        file_url: null 
+                    };
+                    await supabaseClient.from('cheltuieli').insert([nextExp]);
+                }
+            }
+        } 
+        // Cazul 2: Fixe constante (Cat 1) PERMANENTE (Chirie, FARA rate completate)
+        else if (exp.category === '1' && !exp.total_rates) {
             const nextMonth = getNextMonthStr(exp.month_val, 1);
-            
             const { data: existing, error } = await supabaseClient.from('cheltuieli')
-                .select('id')
-                .eq('month_val', nextMonth)
-                .eq('merchant', exp.merchant)
-                .eq('current_rate', exp.current_rate + 1);
+                .select('id').eq('month_val', nextMonth).eq('merchant', exp.merchant).is('current_rate', null);
                 
             if (!error && (!existing || existing.length === 0)) {
                 const nextExp = {
@@ -482,20 +502,19 @@
                     amount: exp.amount,
                     comments: exp.comments || '',
                     is_paid: false,
-                    current_rate: exp.current_rate + 1,
-                    total_rates: exp.total_rates,
+                    current_rate: null,
+                    total_rates: null,
                     file_url: null 
                 };
                 await supabaseClient.from('cheltuieli').insert([nextExp]);
             }
-        } else if (exp.category === '4' && exp.total_rates) {
+        }
+        // Cazul 3: Recurente periodice (Cat 4) la X luni
+        else if (exp.category === '4' && exp.total_rates) {
             const nextMonth = getNextMonthStr(exp.month_val, exp.total_rates);
             
             const { data: existing, error } = await supabaseClient.from('cheltuieli')
-                .select('id')
-                .eq('month_val', nextMonth)
-                .eq('merchant', exp.merchant)
-                .eq('category', '4');
+                .select('id').eq('month_val', nextMonth).eq('merchant', exp.merchant).eq('category', '4');
                 
             if (!error && (!existing || existing.length === 0)) {
                 const nextExp = {
@@ -735,7 +754,6 @@
             return true;
         });
 
-        // Executam sortarea algoritmica
         filteredExpenses.sort((a, b) => {
             let valA = a[sortCol];
             let valB = b[sortCol];
@@ -758,19 +776,18 @@
                 tr.style.cssText = "opacity: 0.25; background-color: #221a1a;";
             }
             
-            // Logică Strike-through izolata pe text, pastrand restul elementelor lizibile
             let strikeStyle = exp.is_paid ? 'text-decoration: line-through; opacity: 0.55; color: #888;' : '';
             
             let rateBadge = '';
             if (exp.category === '1' && exp.current_rate && exp.total_rates) {
-                rateBadge = `<span style="font-size: 0.85em; color: #f39c12; margin-left: 8px;">- Rata ${exp.current_rate} din ${exp.total_rates}</span>`;
+                rateBadge = `<span style="font-size: 0.85em; color: #f39c12; margin-left: 8px; text-decoration: none !important; display: inline-block;">- Rata ${exp.current_rate} din ${exp.total_rates}</span>`;
             } else if (exp.category === '4' && exp.total_rates) {
-                rateBadge = `<span style="font-size: 0.85em; color: #9b59b6; margin-left: 8px;">- Recurent la ${exp.total_rates} luni</span>`;
+                rateBadge = `<span style="font-size: 0.85em; color: #9b59b6; margin-left: 8px; text-decoration: none !important; display: inline-block;">- Recurent la ${exp.total_rates} luni</span>`;
             }
             
             let fileLink = '';
             if (exp.file_url) {
-                fileLink = `<br><a href="${exp.file_url}" target="_blank" style="color: #3498db; text-decoration: none; font-size: 0.85em;">📄 Vezi Factura / QR</a>`;
+                fileLink = `<br><a href="${exp.file_url}" target="_blank" style="color: #3498db; text-decoration: none !important; font-size: 0.85em; display: inline-block;">📄 Vezi Factura / QR</a>`;
             }
 
             tr.innerHTML = `
@@ -781,7 +798,7 @@
                 <td style="max-width: 250px; overflow-wrap: break-word; word-break: break-word; white-space: normal; ${strikeStyle}">${exp.comments || ''}</td>
                 <td>
                     <input type="checkbox" ${exp.is_paid ? 'checked' : ''} onchange="togglePaid(${exp.id}, ${exp.is_paid})">
-                    ${exp.is_paid ? 'Da' : 'Nu'}
+                    <span style="${strikeStyle}">${exp.is_paid ? 'Da' : 'Nu'}</span>
                 </td>
                 <td style="text-align: center;">
                     <input type="checkbox" ${isExcluded ? 'checked' : ''} onchange="toggleExclude(${exp.id})" style="transform: scale(1.2); cursor: pointer;">
