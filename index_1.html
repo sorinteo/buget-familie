@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ro">
 <head>
@@ -347,7 +348,6 @@
 <script>
     const supabaseUrl = 'https://qvfcsvhofkzcprxatnhu.supabase.co';
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2ZmNzdmhvZmt6Y3ByeGF0bmh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzM3MDAsImV4cCI6MjA5Njg0OTcwMH0.zJRZvAHFKUhdrpuB3h1WiolbM6OlfaX_djCVKtPLXUc';
-    const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
     const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
     
     let expenses = [];
@@ -886,7 +886,6 @@
         });
         updateSortIndicators();
 
-        // LOGICĂ UPGRADE: Dacă tab-ul de grafice este cel activ în acest moment, re-randăm automat graficul live
         if (document.getElementById('tab-charts').classList.contains('active')) {
             updateChart();
         }
@@ -950,7 +949,6 @@
                 responsive: true, 
                 maintainAspectRatio: false, 
                 scales: { 
-                    // CORECTURĂ CRITICĂ: Activăm stivuirea explicită pe axe, altfel barele din același stack se desenează suprapuse
                     x: { stacked: true }, 
                     y: { stacked: true } 
                 } 
