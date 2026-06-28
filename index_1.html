@@ -197,9 +197,9 @@
     </div>
 
     <div class="tab-navigation">
-        <button class="tab-btn active" onclick="switchTab('expenses')">📋 Registru Tranzacții</button>
-        <button class="tab-btn" onclick="switchTab('charts')">📊 Evoluție Grafică</button>
-        <button class="tab-btn" onclick="switchTab('converter')">💱 Convertor Valutar</button>
+        <button class="tab-btn active" onclick="switchTab('expenses', this)">📋 Registru Tranzacții</button>
+        <button class="tab-btn" onclick="switchTab('charts', this)">📊 Evoluție Grafică</button>
+        <button class="tab-btn" onclick="switchTab('converter', this)">💱 Convertor Valutar</button>
     </div>
 
     <div id="tab-expenses" class="tab-content active">
@@ -348,6 +348,7 @@
     const supabaseUrl = 'https://qvfcsvhofkzcprxatnhu.supabase.co';
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2ZmNzdmhvZmt6Y3ByeGF0bmh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzM3MDAsImV4cCI6MjA5Njg0OTcwMH0.zJRZvAHFKUhdrpuB3h1WiolbM6OlfaX_djCVKtPLXUc';
     const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+    const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
     
     let expenses = [];
     let excludedIds = []; 
@@ -369,17 +370,17 @@
         setupIncomeFormListener();
     });
 
-    function switchTab(tabId) {
+    function switchTab(tabId, btnElement) {
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-        if (event && event.target) {
-            event.target.classList.add('active');
+        if (btnElement) {
+            btnElement.classList.add('active');
         }
 
         document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
         document.getElementById('tab-' + tabId).classList.add('active');
 
         if (tabId === 'charts') {
-            setTimeout(updateChart, 50);
+            setTimeout(updateChart, 60);
         }
     }
 
@@ -534,7 +535,6 @@
     }
 
     async function handleNextRateRollover(exp) {
-        // Cazul 1: Fixe constante (Cat 1) CU numar finit de rate -> PERPETUEAZĂ ATASAMENTUL
         if (exp.category === '1' && exp.current_rate && exp.total_rates) {
             if (exp.current_rate < exp.total_rates) {
                 const nextMonth = getNextMonthStr(exp.month_val, 1);
@@ -552,17 +552,15 @@
                             is_paid: false,
                             current_rate: exp.current_rate + 1,
                             total_rates: exp.total_rates,
-                            file_url: exp.file_url // Se propagă automat linkul fișierului
+                            file_url: exp.file_url 
                         };
                         await supabaseClient.from('cheltuieli').insert([nextExp]);
                     } else if (editingExpenseId) {
-                        // Upgrade: actualizează și rândul pregenerat existent dacă suntem în mod editare
                         await supabaseClient.from('cheltuieli').update({ file_url: exp.file_url }).eq('id', existing[0].id);
                     }
                 }
             }
         } 
-        // Cazul 2: Fixe constante (Cat 1) PERMANENTE (Chirie) -> PERPETUEAZĂ ATASAMENTUL
         else if (exp.category === '1' && !exp.total_rates) {
             const nextMonth = getNextMonthStr(exp.month_val, 1);
             const { data: existing, error } = await supabaseClient.from('cheltuieli')
@@ -579,16 +577,14 @@
                         is_paid: false,
                         current_rate: null,
                         total_rates: null,
-                        file_url: exp.file_url // Se propagă automat linkul fișierului
+                        file_url: exp.file_url 
                     };
                     await supabaseClient.from('cheltuieli').insert([nextExp]);
                 } else if (editingExpenseId) {
-                    // Upgrade: în cascadă, actualizează și rândul pregenerat existent
                     await supabaseClient.from('cheltuieli').update({ file_url: exp.file_url }).eq('id', existing[0].id);
                 }
             }
         }
-        // Cazul 3: Recurente periodice (Cat 4) la X luni -> Lasă fișierul pe null (facturi diferite)
         else if (exp.category === '4' && exp.total_rates) {
             const nextMonth = getNextMonthStr(exp.month_val, exp.total_rates);
             const { data: existing, error } = await supabaseClient.from('cheltuieli')
@@ -889,6 +885,11 @@
             tbody.appendChild(tr);
         });
         updateSortIndicators();
+
+        // LOGICĂ UPGRADE: Dacă tab-ul de grafice este cel activ în acest moment, re-randăm automat graficul live
+        if (document.getElementById('tab-charts').classList.contains('active')) {
+            updateChart();
+        }
     }
 
     document.getElementById('expenseMonth').addEventListener('change', renderUI);
@@ -936,7 +937,10 @@
         expenseChartInstance = new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: alle', data: cat2Data, backgroundColor: '#f1c40f', stack: 'cheltuieli' },
+                labels: allMonths,
+                datasets: [
+                    { label: 'Fixe', data: cat1Data, backgroundColor: '#34495e', stack: 'cheltuieli' },
+                    { label: 'Variabile', data: cat2Data, backgroundColor: '#f1c40f', stack: 'cheltuieli' },
                     { label: 'Neprevăzute', data: cat3Data, backgroundColor: '#e74c3c', stack: 'cheltuieli' },
                     { label: 'Periodice', data: cat4Data, backgroundColor: '#9b59b6', stack: 'cheltuieli' },
                     { label: 'Încasări / Salarii', data: incomeData, backgroundColor: '#2ecc71', stack: 'venituri' }
@@ -946,8 +950,9 @@
                 responsive: true, 
                 maintainAspectRatio: false, 
                 scales: { 
-                    x: { stacked: false }, 
-                    y: { stacked: false } 
+                    // CORECTURĂ CRITICĂ: Activăm stivuirea explicită pe axe, altfel barele din același stack se desenează suprapuse
+                    x: { stacked: true }, 
+                    y: { stacked: true } 
                 } 
             }
         });
