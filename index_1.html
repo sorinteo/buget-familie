@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buget Familie</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background-color: #121212; 
+            padding: 20px; 
+            color: #e0e0e0; 
+        }
+        .container { 
+            max-width: 1150px; 
+            margin: auto; 
+            background: #1e1e1e; 
+            padding: 25px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.6); 
+        }
+        h1, h2, h3 { color: #ffffff; }
+        .dashboard { 
+            display: flex; 
+            gap: 15px; 
+            margin-bottom: 25px; 
+            flex-wrap: wrap;
+        }
+        .card { 
+            flex: 1; 
+            min-width: 180px;
+            padding: 20px; 
+            border-radius: 8px; 
+            text-align: center; 
+            font-size: 1.2em; 
+            font-weight: bold; 
+            color: white; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+        .bg-total { background-color: #2c3e50; }
+        .bg-paid { background-color: #1e8449; }
+        .bg-remaining { background-color: #c0392b; }
+        .bg-income { background-color: #27ae60; }
+        .bg-balance { background-color: #6d4194; transition: background-color 0.3s; }
+        
+        .tab-navigation {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+        }
+        .tab-btn {
+            background-color: #2c2c2c;
+            color: #bbb;
+            padding: 12px 20px;
+            border: 1px solid #444;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1em;
+            transition: 0.3s;
+        }
+        .tab-btn:hover {
+            background-color: #383838;
+            color: #fff;
+        }
+        .tab-btn.active {
+            background-color: #2980b9;
+            color: white;
+            border-color: #2980b9;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+
+        .form-group { 
+            display: flex; 
+            gap: 15px; 
+            margin-bottom: 20px; 
+            flex-wrap: wrap; 
+            align-items: center; 
+        }
+        .sub-form-box {
+            background-color: #222;
+            border: 1px dashed #444;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+        }
+        .filter-panel {
+            background-color: #252525;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #333;
+        }
+        .converter-panel {
+            background-color: #1a252f;
+            padding: 25px;
+            border-radius: 8px;
+            border: 1px solid #2c3e50;
+        }
+        input, select { 
+            padding: 10px; 
+            border: 1px solid #444; 
+            border-radius: 6px; 
+            font-size: 1em; 
+            background-color: #2c2c2c; 
+            color: #ffffff; 
+        }
+        button { 
+            padding: 10px 15px;
+            background-color: #2980b9; 
+            color: white; 
+            cursor: pointer; 
+            border: none; 
+            border-radius: 6px;
+            font-size: 1em;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+        button:hover { background-color: #2471a3; }
+        
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 30px; 
+        }
+        th, td { 
+            padding: 12px; 
+            border-bottom: 1px solid #444; 
+            text-align: left; 
+        }
+        
+        th { 
+            background-color: #2a2a2a; 
+            color: #ffffff; 
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            user-select: none;
+        }
+        
+        .checkbox-container { display: flex; align-items: center; gap: 5px; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .btn-logout { background-color: #7f8c8d; }
+        .btn-logout:hover { background-color: #636e72; }
+        
+        ::placeholder { color: #777; }
+    </style>
+</head>
+<body>
+
+<div id="loginSection" class="container" style="max-width: 400px; margin-top: 100px;">
+    <h2>Autentificare</h2>
+    <form id="loginForm" style="display: flex; flex-direction: column; gap: 15px;">
+        <input type="email" id="email" placeholder="Adresa de email" required>
+        <input type="password" id="password" placeholder="Parola" required>
+        <button type="submit">Intră în cont</button>
+    </form>
+</div>
+
+<div id="appSection" class="container" style="display: none;">
+    <div class="header-bar">
+        <h1>Management Finanțe Lunare</h1>
+        <button class="btn-logout" onclick="logout()">Deconectare</button>
+    </div>
+
+    <div class="dashboard">
+        <div class="card bg-total">
+            Total Cheltuieli:<br>
+            <span id="totalAmount">0.00</span>
+        </div>
+        <div class="card bg-paid">
+            Plătit:<br>
+            <span id="paidAmount">0.00</span>
+        </div>
+        <div class="card bg-remaining">
+            Rest de plată:<br>
+            <span id="remainingAmount">0.00</span>
+        </div>
+        <div class="card bg-income">
+            Încasări / Venituri:<br>
+            <span id="totalIncomeAmount">0.00</span>
+        </div>
+        <div class="card bg-balance" id="balanceCard">
+            Balanță (Economii):<br>
+            <span id="balanceAmount">0.00</span>
+        </div>
+    </div>
+
+    <div class="tab-navigation">
+        <button class="tab-btn active" onclick="switchTab('expenses')">📋 Registru Tranzacții</button>
+        <button class="tab-btn" onclick="switchTab('charts')">📊 Evoluție Grafică</button>
+        <button class="tab-btn" onclick="switchTab('converter')">💱 Convertor Valutar</button>
+    </div>
+
+    <div id="tab-expenses" class="tab-content active">
+        <h2 id="formTitle">Adaugă Cheltuială</h2>
+        <form id="expenseForm" style="margin-bottom: 25px;">
+            <div class="form-group">
+                <input type="month" id="expenseMonth" required>
+                <input type="text" id="merchant" placeholder="Comerciant" required>
+                <select id="category">
+                    <option value="1">Cat 1 - Fixe constante</option>
+                    <option value="2">Cat 2 - Variabile</option>
+                    <option value="3">Cat 3 - Neprevăzute</option>
+                    <option value="4">Cat 4 - Recurente periodice (la x luni)</option>
+                </select>
+                <input type="number" id="amount" placeholder="Sumă" step="0.01" required>
+            </div>
+            
+            <div class="form-group" id="rateFields" style="display: flex;">
+                <input type="number" id="currentRate" placeholder="Rata curentă" min="1" style="width: 140px;">
+                <span style="color: white;">din</span>
+                <input type="number" id="totalRates" placeholder="Total rate" min="1" style="width: 140px;">
+                <span style="color: #aaa; font-size: 0.85em; margin-left: 10px;">(Lasă goale pentru cheltuieli permanente gen Chirie)</span>
+            </div>
+
+            <div class="form-group" id="periodicFields" style="display: none;">
+                <span style="color: white;">Se repetă o dată la:</span>
+                <select id="periodMonths" style="width: 150px;">
+                    <option value="2">2 luni</option>
+                    <option value="3">3 luni</option>
+                    <option value="6" selected>6 luni</option>
+                    <option value="12">12 luni (Anual)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <input type="text" id="comments" placeholder="Comentarii" style="flex-grow: 1;">
+                <input type="file" id="fileUpload" accept="image/jpeg, image/png, application/pdf" style="flex-grow: 1;">
+                <label class="checkbox-container">
+                    <input type="checkbox" id="isPaid"> Achitat acum
+                </label>
+                <button type="submit" id="saveBtn">Salvează</button>
+                <button type="button" id="cancelEditBtn" style="display: none; background-color: #e67e22;" onclick="cancelEdit()">Anulează Editarea</button>
+            </div>
+        </form>
+
+        <div class="sub-form-box">
+            <h3 style="margin-top: 0; color: #2ecc71; font-size: 1.1em;">💰 Adaugă Venit / Salariu / Încasări</h3>
+            <form id="incomeForm">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <input type="month" id="incomeMonth" required>
+                    <input type="text" id="incomeSource" placeholder="Sursa (ex: Salariu Oracle, Bonus, Dividende)" style="width: 320px;" required>
+                    <input type="number" id="incomeAmount" placeholder="Sumă încasată" step="0.01" style="width: 160px;" required>
+                    <button type="submit" id="saveIncomeBtn" style="background-color: #27ae60;">Înregistrează Venit</button>
+                </div>
+            </form>
+        </div>
+
+        <h2>Registru Istoric Tranzacții</h2>
+        <div class="filter-panel">
+            <h3 style="margin-top: 0; font-size: 1.1em; color: #3498db;">🔍 Zone de Filtrare și Căutare Rapidă</h3>
+            <div class="form-group" style="margin-bottom: 0;">
+                <input type="text" id="filterSearch" placeholder="Caută comerciant/sursă..." style="width: 250px;">
+                
+                <select id="filterCategory">
+                    <option value="ALL">Toate Fluxurile (Cheltuieli + Venituri)</option>
+                    <option value="1">Cat 1 - Fixe constante</option>
+                    <option value="2">Cat 2 - Variabile</option>
+                    <option value="3">Cat 3 - Neprevăzute</option>
+                    <option value="4">Cat 4 - Recurente periodice</option>
+                    <option value="INCOME">Doar Venituri / Încasări</option>
+                </select>
+                
+                <select id="filterStatus">
+                    <option value="ALL">Toate Statusurile</option>
+                    <option value="PAID">Doar Achitate / Încasate</option>
+                    <option value="UNPAID">Doar Neachitate (Rest de plată)</option>
+                </select>
+                
+                <input type="number" id="filterMinAmount" placeholder="Suma minimă" step="0.01" style="width: 120px;">
+                <input type="number" id="filterMaxAmount" placeholder="Suma maximă" step="0.01" style="width: 120px;">
+                
+                <select id="filterMonthScope">
+                    <option value="SELECTED">Doar luna selectată sus</option>
+                    <option value="ALL">Toate lunile din istoric</option>
+                </select>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th onclick="setSort('month_val')" style="cursor: pointer;">Luna <span id="sort_month_val"></span></th>
+                    <th onclick="setSort('merchant')" style="cursor: pointer;">Comerciant / Sursă <span id="sort_merchant"></span></th>
+                    <th onclick="setSort('category')" style="cursor: pointer;">Tip / Categorie <span id="sort_category"></span></th>
+                    <th onclick="setSort('amount')" style="cursor: pointer;">Sumă <span id="sort_amount"></span></th>
+                    <th onclick="setSort('comments')" style="cursor: pointer; max-width: 250px;">Comentarii <span id="sort_comments"></span></th>
+                    <th onclick="setSort('is_paid')" style="cursor: pointer;">Status <span id="sort_is_paid"></span></th>
+                    <th style="text-align: center; color: #f1c40f;">Exclude 👁️</th>
+                    <th>Acțiuni</th>
+                </tr>
+            </thead>
+            <tbody id="expenseTableBody"></tbody>
+        </table>
+    </div>
+
+    <div id="tab-charts" class="tab-content">
+        <h2>Rapoarte Financiare: Cheltuieli vs. Încasări (Istoric Real)</h2>
+        <div class="filter-panel">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label for="chartMonths">Număr de luni analizate în istoric:</label>
+                <input type="number" id="chartMonths" value="6" min="1" max="60" style="width: 80px;">
+                <button type="button" onclick="updateChart()">Reîmprospătează Grafic</button>
+            </div>
+        </div>
+        <div style="position: relative; width: 100%; height: 500px;">
+            <canvas id="expenseChart"></canvas>
+        </div>
+    </div>
+
+    <div id="tab-converter" class="tab-content">
+        <h2>Instrumente Financiare</h2>
+        <div class="converter-panel">
+            <h3 style="margin-top: 0; font-size: 1.2em; color: #2ecc71;">💱 Schimb Valutar în Timp Real</h3>
+            <p style="color: #aaa; font-size: 0.9em; margin-bottom: 20px;">Cursurile sunt actualizate automat la zi raportat la moneda de bază (CHF).</p>
+            <div class="form-group" style="margin-bottom: 0;">
+                <input type="number" id="convAmount" value="100" step="0.01" style="width: 150px; font-size: 1.1em;">
+                <select id="convFrom" style="font-size: 1.1em; cursor: pointer;">
+                    <option value="CHF" selected>CHF</option>
+                    <option value="RON">RON</option>
+                    <option value="EUR">EUR</option>
+                </select>
+                <span style="color: #2ecc71; font-weight: bold; font-size: 1.5em;">➔</span>
+                <select id="convTo" style="font-size: 1.1em; cursor: pointer;">
+                    <option value="CHF">CHF</option>
+                    <option value="RON" selected>RON</option>
+                    <option value="EUR">EUR</option>
+                </select>
+                <span style="color: white; margin-left: 15px; font-size: 1.1em;">Rezultat estimat:</span>
+                <span id="convResult" style="font-weight: bold; font-size: 1.4em; color: #2ecc71; min-width: 150px;">0.00 RON</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const supabaseUrl = 'https://qvfcsvhofkzcprxatnhu.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2ZmNzdmhvZmt6Y3ByeGF0bmh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzM3MDAsImV4cCI6MjA5Njg0OTcwMH0.zJRZvAHFKUhdrpuB3h1WiolbM6OlfaX_djCVKtPLXUc';
+    const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+    
+    let expenses = [];
+    let excludedIds = []; 
+    let expenseChartInstance = null;
+    let editingExpenseId = null;
+    let existingFileUrl = null;
+
+    let sortCol = 'id';
+    let sortAsc = false;
+
+    let exchangeRates = { CHF: 1.0, RON: 5.12, EUR: 1.03 };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        checkSession();
+        toggleRateFields();
+        setupFilterListeners();
+        fetchLiveRates();
+        setupConverterListeners();
+        setupIncomeFormListener();
+    });
+
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        if (event && event.target) {
+            event.target.classList.add('active');
+        }
+
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        document.getElementById('tab-' + tabId).classList.add('active');
+
+        if (tabId === 'charts') {
+            setTimeout(updateChart, 50);
+        }
+    }
+
+    const catSelect = document.getElementById('category');
+    const rateDiv = document.getElementById('rateFields');
+    const periodicDiv = document.getElementById('periodicFields');
+
+    function toggleRateFields() {
+        if(catSelect.value === '1') {
+            rateDiv.style.display = 'flex';
+            periodicDiv.style.display = 'none';
+        } else if(catSelect.value === '4') {
+            rateDiv.style.display = 'none';
+            periodicDiv.style.display = 'flex';
+        } else {
+            rateDiv.style.display = 'none';
+            periodicDiv.style.display = 'none';
+            document.getElementById('currentRate').value = '';
+            document.getElementById('totalRates').value = '';
+        }
+    }
+
+    catSelect.addEventListener('change', toggleRateFields);
+
+    function setupFilterListeners() {
+        document.getElementById('filterSearch').addEventListener('input', renderUI);
+        document.getElementById('filterCategory').addEventListener('change', renderUI);
+        document.getElementById('filterStatus').addEventListener('change', renderUI);
+        document.getElementById('filterMinAmount').addEventListener('input', renderUI);
+        document.getElementById('filterMaxAmount').addEventListener('input', renderUI);
+        document.getElementById('filterMonthScope').addEventListener('change', renderUI);
+    }
+
+    function setupConverterListeners() {
+        document.getElementById('convAmount').addEventListener('input', runConversion);
+        document.getElementById('convFrom').addEventListener('change', runConversion);
+        document.getElementById('convTo').addEventListener('change', runConversion);
+    }
+
+    function setupIncomeFormListener() {
+        document.getElementById('incomeForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const saveIncomeBtn = document.getElementById('saveIncomeBtn');
+            saveIncomeBtn.innerText = 'Se salvează...';
+            saveIncomeBtn.disabled = true;
+
+            const inc = {
+                month_val: document.getElementById('incomeMonth').value,
+                merchant: document.getElementById('incomeSource').value,
+                category: 'INCOME',
+                amount: parseFloat(document.getElementById('incomeAmount').value),
+                comments: 'Încasare Venit / Salariu',
+                is_paid: true, 
+                current_rate: null,
+                total_rates: null,
+                file_url: null
+            };
+
+            const { error } = await supabaseClient.from('cheltuieli').insert([inc]);
+            if (error) {
+                alert("Eroare la salvarea venitului.");
+            } else {
+                const currentMonth = document.getElementById('incomeMonth').value;
+                this.reset();
+                document.getElementById('incomeMonth').value = currentMonth;
+            }
+
+            fetchExpenses();
+            saveIncomeBtn.disabled = false;
+            saveIncomeBtn.innerText = 'Înregistrează Venit';
+        });
+    }
+
+    async function fetchLiveRates() {
+        try {
+            const response = await fetch('https://open.er-api.com/v6/latest/CHF');
+            if (response.ok) {
+                const data = await response.json();
+                if (data && data.rates) {
+                    exchangeRates.RON = data.rates.RON || exchangeRates.RON;
+                    exchangeRates.EUR = data.rates.EUR || exchangeRates.EUR;
+                }
+            }
+        } catch (error) {
+            console.log("Nu s-au putut prelua ratele live. Se folosesc valorile de fallback.");
+        }
+        runConversion();
+    }
+
+    function runConversion() {
+        const amount = parseFloat(document.getElementById('convAmount').value) || 0;
+        const fromVal = document.getElementById('convFrom').value;
+        const toVal = document.getElementById('convTo').value;
+
+        const amountInCHF = amount / exchangeRates[fromVal];
+        const convertedResult = amountInCHF * exchangeRates[toVal];
+
+        document.getElementById('convResult').innerText = convertedResult.toFixed(2) + ' ' + toVal;
+    }
+
+    async function checkSession() {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('appSection').style.display = 'block';
+            const currentMonthStr = new Date().toISOString().slice(0, 7);
+            document.getElementById('expenseMonth').value = currentMonthStr;
+            document.getElementById('incomeMonth').value = currentMonthStr;
+            fetchExpenses();
+        }
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const { error } = await supabaseClient.auth.signInWithPassword({ email: email, password: password });
+        
+        if (error) {
+            alert("Eroare la autentificare. Verifică datele introduse.");
+        } else {
+            checkSession();
+        }
+    });
+
+    async function logout() {
+        await supabaseClient.auth.signOut();
+        window.location.reload();
+    }
+
+    async function fetchExpenses() {
+        const { data, error } = await supabaseClient.from('cheltuieli').select('*').order('id', { ascending: false });
+        if (!error && data) {
+            expenses = data;
+            renderUI();
+        }
+    }
+
+    function getNextMonthStr(monthVal, increment = 1) {
+        let parts = monthVal.split('-');
+        let year = parseInt(parts[0]);
+        let month = parseInt(parts[1]);
+        
+        month += parseInt(increment);
+        while (month > 12) {
+            month -= 12;
+            year++;
+        }
+        
+        let monthStr = month < 10 ? '0' + month : month;
+        return year + '-' + monthStr;
+    }
+
+    async function handleNextRateRollover(exp) {
+        // Cazul 1: Fixe constante (Cat 1) CU numar finit de rate -> PERPETUEAZĂ ATASAMENTUL
+        if (exp.category === '1' && exp.current_rate && exp.total_rates) {
+            if (exp.current_rate < exp.total_rates) {
+                const nextMonth = getNextMonthStr(exp.month_val, 1);
+                const { data: existing, error } = await supabaseClient.from('cheltuieli')
+                    .select('id, file_url').eq('month_val', nextMonth).eq('merchant', exp.merchant).eq('current_rate', exp.current_rate + 1);
+                    
+                if (!error) {
+                    if (!existing || existing.length === 0) {
+                        const nextExp = {
+                            month_val: nextMonth,
+                            merchant: exp.merchant,
+                            category: exp.category,
+                            amount: exp.amount,
+                            comments: exp.comments || '',
+                            is_paid: false,
+                            current_rate: exp.current_rate + 1,
+                            total_rates: exp.total_rates,
+                            file_url: exp.file_url // Se propagă automat linkul fișierului
+                        };
+                        await supabaseClient.from('cheltuieli').insert([nextExp]);
+                    } else if (editingExpenseId) {
+                        // Upgrade: actualizează și rândul pregenerat existent dacă suntem în mod editare
+                        await supabaseClient.from('cheltuieli').update({ file_url: exp.file_url }).eq('id', existing[0].id);
+                    }
+                }
+            }
+        } 
+        // Cazul 2: Fixe constante (Cat 1) PERMANENTE (Chirie) -> PERPETUEAZĂ ATASAMENTUL
+        else if (exp.category === '1' && !exp.total_rates) {
+            const nextMonth = getNextMonthStr(exp.month_val, 1);
+            const { data: existing, error } = await supabaseClient.from('cheltuieli')
+                .select('id, file_url').eq('month_val', nextMonth).eq('merchant', exp.merchant).is('current_rate', null).eq('category', '1');
+                
+            if (!error) {
+                if (!existing || existing.length === 0) {
+                    const nextExp = {
+                        month_val: nextMonth,
+                        merchant: exp.merchant,
+                        category: exp.category,
+                        amount: exp.amount,
+                        comments: exp.comments || '',
+                        is_paid: false,
+                        current_rate: null,
+                        total_rates: null,
+                        file_url: exp.file_url // Se propagă automat linkul fișierului
+                    };
+                    await supabaseClient.from('cheltuieli').insert([nextExp]);
+                } else if (editingExpenseId) {
+                    // Upgrade: în cascadă, actualizează și rândul pregenerat existent
+                    await supabaseClient.from('cheltuieli').update({ file_url: exp.file_url }).eq('id', existing[0].id);
+                }
+            }
+        }
+        // Cazul 3: Recurente periodice (Cat 4) la X luni -> Lasă fișierul pe null (facturi diferite)
+        else if (exp.category === '4' && exp.total_rates) {
+            const nextMonth = getNextMonthStr(exp.month_val, exp.total_rates);
+            const { data: existing, error } = await supabaseClient.from('cheltuieli')
+                .select('id').eq('month_val', nextMonth).eq('merchant', exp.merchant).eq('category', '4');
+                
+            if (!error && (!existing || existing.length === 0)) {
+                const nextExp = {
+                    month_val: nextMonth,
+                    merchant: exp.merchant,
+                    category: exp.category,
+                    amount: exp.amount,
+                    comments: exp.comments || '',
+                    is_paid: false,
+                    current_rate: null,
+                    total_rates: exp.total_rates, 
+                    file_url: null 
+                };
+                await supabaseClient.from('cheltuieli').insert([nextExp]);
+            }
+        }
+    }
+
+    document.getElementById('expenseForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const saveBtn = document.getElementById('saveBtn');
+        saveBtn.innerText = 'Se salvează...';
+        saveBtn.disabled = true;
+
+        let uploadedFileUrl = existingFileUrl; 
+        const fileInput = document.getElementById('fileUpload');
+        
+        if (fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            const fileExt = file.name.split('.').pop();
+            const fileName = Date.now() + '.' + fileExt;
+            
+            const { data: uploadData, error: uploadError } = await supabaseClient.storage.from('facturi').upload(fileName, file);
+            
+            if (!uploadError) {
+                const { data: publicUrlData } = supabaseClient.storage.from('facturi').getPublicUrl(fileName);
+                uploadedFileUrl = publicUrlData.publicUrl;
+            } else {
+                alert("A apărut o eroare la încărcarea facturii în Storage.");
+            }
+        }
+        
+        const catVal = document.getElementById('category').value;
+        let currentRateVal = null;
+        let totalRatesVal = null;
+
+        if (catVal === '1') {
+            currentRateVal = document.getElementById('currentRate').value ? parseInt(document.getElementById('currentRate').value) : null;
+            totalRatesVal = document.getElementById('totalRates').value ? parseInt(document.getElementById('totalRates').value) : null;
+        } else if (catVal === '4') {
+            totalRatesVal = parseInt(document.getElementById('periodMonths').value);
+        }
+
+        const exp = {
+            month_val: document.getElementById('expenseMonth').value,
+            merchant: document.getElementById('merchant').value,
+            category: catVal,
+            amount: parseFloat(document.getElementById('amount').value),
+            comments: document.getElementById('comments').value,
+            is_paid: document.getElementById('isPaid').checked,
+            current_rate: currentRateVal,
+            total_rates: totalRatesVal,
+            file_url: uploadedFileUrl
+        };
+        
+        if (editingExpenseId) {
+            const { error } = await supabaseClient.from('cheltuieli').update(exp).eq('id', editingExpenseId);
+            if (error) {
+                alert("Eroare la actualizarea cheltuielii.");
+            } else {
+                if (exp.category === '4' || (exp.category === '1' && !exp.total_rates) || exp.is_paid) {
+                    await handleNextRateRollover(exp);
+                }
+                cancelEdit();
+            }
+        } else {
+            const { error } = await supabaseClient.from('cheltuieli').insert([exp]);
+            if (error) {
+                alert("Eroare la salvarea cheltuielii.");
+            } else {
+                if (exp.category === '4' || (exp.category === '1' && !exp.total_rates) || exp.is_paid) {
+                    await handleNextRateRollover(exp);
+                }
+                const currentMonth = document.getElementById('expenseMonth').value;
+                this.reset();
+                document.getElementById('expenseMonth').value = currentMonth;
+                toggleRateFields();
+            }
+        }
+        
+        fetchExpenses();
+        saveBtn.disabled = false;
+        saveBtn.innerText = 'Salvează';
+    });
+
+    function startEdit(id) {
+        const exp = expenses.find(e => e.id === id);
+        if (!exp) return;
+        
+        editingExpenseId = id;
+        existingFileUrl = exp.file_url;
+        
+        document.getElementById('formTitle').innerText = 'Editează Înregistrarea';
+        document.getElementById('expenseMonth').value = exp.month_val;
+        document.getElementById('merchant').value = exp.merchant;
+        document.getElementById('category').value = exp.category;
+        document.getElementById('amount').value = exp.amount;
+        document.getElementById('comments').value = exp.comments || '';
+        document.getElementById('isPaid').checked = exp.is_paid;
+        
+        if (exp.category === '1') {
+            document.getElementById('currentRate').value = exp.current_rate || '';
+            document.getElementById('totalRates').value = exp.total_rates || '';
+        } else if (exp.category === '4') {
+            document.getElementById('periodMonths').value = exp.total_rates || '6';
+        }
+        
+        toggleRateFields();
+        document.getElementById('saveBtn').innerText = 'Actualizează';
+        document.getElementById('cancelEditBtn').style.display = 'inline-block';
+        document.getElementById('expenseForm').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function cancelEdit() {
+        editingExpenseId = null;
+        existingFileUrl = null;
+        document.getElementById('formTitle').innerText = 'Adaugă Cheltuială';
+        document.getElementById('expenseForm').reset();
+        document.getElementById('expenseMonth').value = new Date().toISOString().slice(0, 7);
+        toggleRateFields();
+        document.getElementById('saveBtn').innerText = 'Salvează';
+        document.getElementById('cancelEditBtn').style.display = 'none';
+    }
+
+    async function togglePaid(id, currentStatus) {
+        const nextStatus = !currentStatus;
+        await supabaseClient.from('cheltuieli').update({ is_paid: nextStatus }).eq('id', id);
+        if (nextStatus) {
+            const exp = expenses.find(e => e.id === id);
+            if (exp) await handleNextRateRollover(exp);
+        }
+        fetchExpenses();
+    }
+
+    function toggleExclude(id) {
+        const index = excludedIds.indexOf(id);
+        if (index === -1) excludedIds.push(id);
+        else excludedIds.splice(index, 1);
+        renderUI();
+    }
+
+    function setSort(col) {
+        if (sortCol === col) sortAsc = !sortAsc;
+        else { sortCol = col; sortAsc = true; }
+        renderUI();
+    }
+
+    function updateSortIndicators() {
+        const columns = ['month_val', 'merchant', 'category', 'amount', 'comments', 'is_paid'];
+        columns.forEach(c => {
+            const el = document.getElementById('sort_' + c);
+            if (el) {
+                if (sortCol === c) {
+                    el.innerText = sortAsc ? ' ▲' : ' ▼';
+                    el.style.color = '#2980b9';
+                } else el.innerText = '';
+            }
+        });
+    }
+
+    async function deleteExpense(id) {
+        if(confirm("Sigur vrei să ștergi această înregistrare?")) {
+            await supabaseClient.from('cheltuieli').delete().eq('id', id);
+            excludedIds = excludedIds.filter(item => item !== id);
+            fetchExpenses();
+        }
+    }
+
+    function renderUI() {
+        const tbody = document.getElementById('expenseTableBody');
+        tbody.innerHTML = '';
+        
+        let totalExpenses = 0;
+        let paidExpenses = 0;
+        let totalIncome = 0;
+        const selectedMonth = document.getElementById('expenseMonth').value;
+
+        expenses.forEach(exp => {
+            if (exp.month_val === selectedMonth && !excludedIds.includes(exp.id)) {
+                if (exp.category === 'INCOME') {
+                    totalIncome += exp.amount;
+                } else {
+                    totalExpenses += exp.amount;
+                    if (exp.is_paid) paidExpenses += exp.amount;
+                }
+            }
+        });
+
+        document.getElementById('totalAmount').innerText = totalExpenses.toFixed(2);
+        document.getElementById('paidAmount').innerText = paidExpenses.toFixed(2);
+        document.getElementById('remainingAmount').innerText = (totalExpenses - paidExpenses).toFixed(2);
+        document.getElementById('totalIncomeAmount').innerText = totalIncome.toFixed(2);
+        
+        const balance = totalIncome - totalExpenses;
+        const balanceEl = document.getElementById('balanceAmount');
+        const balanceCard = document.getElementById('balanceCard');
+        balanceEl.innerText = balance.toFixed(2);
+        
+        if (balance < 0) balanceCard.style.backgroundColor = '#962d22'; 
+        else balanceCard.style.backgroundColor = '#6d4194'; 
+
+        const searchVal = document.getElementById('filterSearch').value.toLowerCase();
+        const catVal = document.getElementById('filterCategory').value;
+        const statusVal = document.getElementById('filterStatus').value;
+        const minAmt = parseFloat(document.getElementById('filterMinAmount').value) || 0;
+        const maxAmt = parseFloat(document.getElementById('filterMaxAmount').value) || Infinity;
+        const monthScope = document.getElementById('filterMonthScope').value;
+
+        let filteredExpenses = expenses.filter(exp => {
+            if (monthScope === 'SELECTED' && exp.month_val !== selectedMonth) return false;
+            if (catVal !== 'ALL' && exp.category !== catVal) return false;
+            if (statusVal === 'PAID' && !exp.is_paid) return false;
+            if (statusVal === 'UNPAID' && exp.is_paid) return false;
+            if (exp.amount < minAmt || exp.amount > maxAmt) return false;
+            
+            if (searchVal) {
+                const mMatch = exp.merchant ? exp.merchant.toLowerCase().includes(searchVal) : false;
+                const cMatch = exp.comments ? exp.comments.toLowerCase().includes(searchVal) : false;
+                if (!mMatch && !cMatch) return false;
+            }
+            return true;
+        });
+
+        filteredExpenses.sort((a, b) => {
+            let valA = a[sortCol]; let valB = b[sortCol];
+            if (valA === null || valA === undefined) valA = '';
+            if (valB === null || valB === undefined) valB = '';
+            if (typeof valA === 'string') return sortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            return sortAsc ? (valA - valB) : (valB - valA);
+        });
+
+        filteredExpenses.forEach(exp => {
+            const tr = document.createElement('tr');
+            const isExcluded = excludedIds.includes(exp.id);
+            
+            if (isExcluded) tr.style.cssText = "opacity: 0.25; background-color: #221a1a;";
+
+            let strikeStyle = '';
+            let rowStyle = '';
+            let categoryLabel = `Cat ${exp.category}`;
+            let rateBadge = '';
+
+            if (exp.category === 'INCOME') {
+                rowStyle = 'background-color: #14291a; color: #2ecc71;'; 
+                categoryLabel = '🟢 Venit / Încasare';
+            } else {
+                if (exp.is_paid) strikeStyle = 'text-decoration: line-through; opacity: 0.55; color: #888;';
+                if (exp.category === '1' && exp.current_rate && exp.total_rates) {
+                    rateBadge = `<span style="font-size: 0.85em; color: #f39c12; margin-left: 8px; text-decoration: none !important; display: inline-block;">- Rata ${exp.current_rate} din ${exp.total_rates}</span>`;
+                } else if (exp.category === '1' && !exp.total_rates) {
+                    rateBadge = `<span style="font-size: 0.85em; color: #3498db; margin-left: 8px; text-decoration: none !important; display: inline-block;">- Permanent</span>`;
+                } else if (exp.category === '4' && exp.total_rates) {
+                    rateBadge = `<span style="font-size: 0.85em; color: #9b59b6; margin-left: 8px; text-decoration: none !important; display: inline-block;">- Recurent la ${exp.total_rates} luni</span>`;
+                }
+            }
+            
+            if (rowStyle) tr.style.cssText = rowStyle;
+
+            let fileLink = '';
+            if (exp.file_url) {
+                fileLink = `<br><a href="${exp.file_url}" target="_blank" style="color: #3498db; text-decoration: none !important; font-size: 0.85em; display: inline-block;">📄 Vezi Factura / QR</a>`;
+            }
+
+            let statusCheckbox = exp.category === 'INCOME' 
+                ? `<span style="color: #2ecc71; font-weight: bold;">Încasat</span>`
+                : `<input type="checkbox" ${exp.is_paid ? 'checked' : ''} onchange="togglePaid(${exp.id}, ${exp.is_paid})">
+                   <span style="${strikeStyle}">${exp.is_paid ? 'Da' : 'Nu'}</span>`;
+
+            tr.innerHTML = `
+                <td style="${strikeStyle}">${exp.month_val}</td>
+                <td style="${strikeStyle}"><strong>${exp.merchant}</strong>${rateBadge}${fileLink}</td>
+                <td style="${strikeStyle}">${categoryLabel}</td>
+                <td style="${strikeStyle}">${exp.amount.toFixed(2)}</td>
+                <td style="max-width: 250px; overflow-wrap: break-word; word-break: break-word; white-space: normal; ${strikeStyle}">${exp.comments || ''}</td>
+                <td>${statusCheckbox}</td>
+                <td style="text-align: center;">
+                    <input type="checkbox" ${isExcluded ? 'checked' : ''} onchange="toggleExclude(${exp.id})" style="transform: scale(1.2); cursor: pointer;">
+                </td>
+                <td>
+                    <button style="background-color: #2980b9; padding: 5px 10px; font-size:0.9em; margin-right: 5px;" onclick="startEdit(${exp.id})">Editează</button>
+                    <button style="background-color: #e74c3c; padding: 5px 10px; font-size:0.9em;" onclick="deleteExpense(${exp.id})">Șterge</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+        updateSortIndicators();
+    }
+
+    document.getElementById('expenseMonth').addEventListener('change', renderUI);
+
+    function updateChart() {
+        const canvas = document.getElementById('expenseChart');
+        if (!canvas) return;
+
+        const monthsToAnalyze = parseInt(document.getElementById('chartMonths').value) || 6;
+        const selectedMonth = document.getElementById('expenseMonth').value;
+        
+        const allMonths = [];
+        if (selectedMonth) {
+            let parts = selectedMonth.split('-');
+            let year = parseInt(parts[0]);
+            let month = parseInt(parts[1]);
+
+            for (let i = 0; i < monthsToAnalyze; i++) {
+                let monthStr = month < 10 ? '0' + month : month;
+                allMonths.unshift(`${year}-${monthStr}`); 
+                month--;
+                if (month < 1) {
+                    month = 12;
+                    year--;
+                }
+            }
+        }
+
+        const cat1Data = []; const cat2Data = []; const cat3Data = []; const cat4Data = [];
+        const incomeData = [];
+
+        allMonths.forEach(m => {
+            const mExp = expenses.filter(e => e.month_val === m && !excludedIds.includes(e.id));
+            
+            cat1Data.push(mExp.filter(e => e.category === "1").reduce((s, e) => s + e.amount, 0));
+            cat2Data.push(mExp.filter(e => e.category === "2").reduce((s, e) => s + e.amount, 0));
+            cat3Data.push(mExp.filter(e => e.category === "3").reduce((s, e) => s + e.amount, 0));
+            cat4Data.push(mExp.filter(e => e.category === "4").reduce((s, e) => s + e.amount, 0));
+            incomeData.push(mExp.filter(e => e.category === "INCOME").reduce((s, e) => s + e.amount, 0));
+        });
+
+        const ctx = canvas.getContext('2d');
+        if (expenseChartInstance) expenseChartInstance.destroy();
+
+        expenseChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: alle', data: cat2Data, backgroundColor: '#f1c40f', stack: 'cheltuieli' },
+                    { label: 'Neprevăzute', data: cat3Data, backgroundColor: '#e74c3c', stack: 'cheltuieli' },
+                    { label: 'Periodice', data: cat4Data, backgroundColor: '#9b59b6', stack: 'cheltuieli' },
+                    { label: 'Încasări / Salarii', data: incomeData, backgroundColor: '#2ecc71', stack: 'venituri' }
+                ]
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                scales: { 
+                    x: { stacked: false }, 
+                    y: { stacked: false } 
+                } 
+            }
+        });
+    }
+</script>
+</body>
+</html>
